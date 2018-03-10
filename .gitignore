@@ -1,4 +1,8 @@
 # Compiled Object files
+
+*include/ossia
+*.DS_Store
+*.user
 *.slo
 *.lo
 *.o
