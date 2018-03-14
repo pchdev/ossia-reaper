@@ -8,8 +8,10 @@ set(WDL_LIBRARY_PATH)
 set(OSSIA_INCLUDE_PATH)
 set(OSSIA_LIBRARY_PATH)
 
-set(OSSIA_REAPER_HEADERS)
+set(OSSIA_REAPER_HEADERS
+    include/csurf.h)
 set(OSSIA_REAPER_SOURCES
+    #csurf_main.cpp
     ossia-reaper.cpp)
 
 set(CMAKE_CXX_STANDARD 14)
