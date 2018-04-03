@@ -1,6 +1,8 @@
 #include <csurf.h>
 #include "ossia-reaper.hpp"
 
+#include <ossia/network/domain/domain_functions.hpp>
+
 // GLOBALS --------------------------------------------------------------------
 REAPER_PLUGIN_HINSTANCE g_hInst;
 HWND g_parent;
@@ -108,7 +110,7 @@ void OssiaControlSurface::create_rootnode() //----------------------------------
 
 }
 
-inline const std::string get_formated_track_name(MediaTrack* track)
+inline const std::string get_track_name(MediaTrack* track, bool formated = false )
 {
     char trackname [ 1024 ];
 
@@ -119,24 +121,26 @@ inline const std::string get_formated_track_name(MediaTrack* track)
     return trackstr;
 }
 
-inline std::string get_formated_fx_name(MediaTrack* track, int fx)
+inline std::string get_fx_name(MediaTrack* track, int fx, bool formated = false )
 {
     char fxname [ 1024 ];
 
     TrackFX_GetFXName   ( track, fx, fxname, 1024 );
     string fxstr        = fxname;
-    std::replace        ( fxstr.begin(), fxstr.end(), ' ', '_');
+
+    if ( formated ) std::replace ( fxstr.begin(), fxstr.end(), ' ', '_');
 
     return fxstr;
 }
 
-inline std::string get_formated_param_name(MediaTrack* track, int fx, int param)
+inline std::string get_parameter_name(MediaTrack* track, int fx, int param, bool formated = false)
 {
     char param_name [ 1024 ];
 
     TrackFX_GetParamName    ( track, fx, param, param_name, 1024 );
     string paramstr         = param_name;
-    std::replace            ( paramstr.begin(), paramstr.end(), ' ', '_' );
+
+    if ( formated ) std::replace ( paramstr.begin(), paramstr.end(), ' ', '_' );
 
     return paramstr;
 }
@@ -157,7 +161,7 @@ void OssiaControlSurface::update_track_parameter ( MediaTrack* track, ossia::str
     int tr = CSurf_TrackToID ( track, true );
     if ( tr == 0 || !m_tracks_n ) return;
 
-    auto track_str          = get_formated_track_name(track);
+    auto track_str          = get_track_name(track, true);
     auto track_n            = m_tracks_n->find_child(track_str);
     node_base* target_n     = 0;
 
@@ -185,7 +189,7 @@ void OssiaControlSurface::SetTrackListChange()
         // note that Master Track is always track 0,
         // but is not part of the GetNumTracks result
         MediaTrack* track   = GetTrack(0,t);
-        auto trackstr       = get_formated_track_name(track);
+        auto trackstr       = get_track_name(track, true);
 
         auto tracknode = m_tracks_n->find_child(trackstr);
         if (!tracknode) tracknode = m_tracks_n->create_child(trackstr);
@@ -222,6 +226,7 @@ void OssiaControlSurface::SetTrackListChange()
             CSurf_SetSurfaceSolo(tr, CSurf_OnSoloChange(tr, v.get<bool>()), NULL);
         });
 
+        tracknode->create_child("fx");
         parse_track_fx(track);
     }
 }
@@ -229,15 +234,17 @@ void OssiaControlSurface::SetTrackListChange()
 void OssiaControlSurface::parse_track_fx(MediaTrack *track)
 {
     auto track_id        = CSurf_TrackToID(track, false);
-    auto track_str       = get_formated_track_name(track);
-    auto track_node      = m_tracks_n->find_child(track_str);
+    auto track_str       = get_track_name(track, true);
 
-    track_node          ->clear_children( );
+    auto track_node      = m_tracks_n->find_child(track_str);
+    auto fxn             = track_node->find_child("fx");
+
+    fxn                 ->clear_children( );
 
     for ( uint8_t i = 0; i <  TrackFX_GetCount(track); ++i )
     {
-        auto fx_name = get_formated_fx_name ( track, i );
-        auto fx_node = track_node->create_child ( fx_name );
+        auto fx_name = get_fx_name ( track, i, true );
+        auto fx_node = fxn->create_child ( fx_name );
 
         // enabled --------------------------------------------------------------------
 
@@ -258,9 +265,17 @@ void OssiaControlSurface::parse_track_fx(MediaTrack *track)
 
         for ( uint8_t p = 0; p < TrackFX_GetNumParams(track, i); ++p )
         {
-            auto param_name = get_formated_param_name(track, i, p);
+            auto param_name = get_parameter_name(track, i, p, true);
             auto param_node = params_node->create_child(param_name);
             auto param_p    = param_node->create_parameter ( ossia::val_type::FLOAT );
+
+            double param_min, param_max;
+            auto param_value = TrackFX_GetParam(track, i, p, &param_min, &param_max);
+
+            auto domain = ossia::make_domain(param_min, param_max);
+            ossia::net::set_domain(*param_node, domain);
+
+            param_p->set_value(param_value);
 
             param_p->add_callback([=](const ossia::value& v) {
                 MediaTrack* tr = CSurf_TrackFromID(track_id, true);
@@ -362,6 +377,8 @@ int OssiaControlSurface::Extended(int call, void *parm1, void *parm2, void *parm
     }
     case CSURF_EXT_SETFXCHANGE:
     {
+        MediaTrack* track = ( MediaTrack* ) parm1;
+        parse_track_fx ( track );
         break;
     }
     case CSURF_EXT_SETFXENABLED:
@@ -374,6 +391,39 @@ int OssiaControlSurface::Extended(int call, void *parm1, void *parm2, void *parm
     }
     case CSURF_EXT_SETFXPARAM:
     {
+    // parm1=(MediaTrack*)track, parm2=(int*)(fxidx<<16|paramidx), parm3=(double*)normalized value
+
+
+        // TODO ------------ GET PARAMETERS PER NUMBER INSTEAD OF FIND_NODE
+
+        MediaTrack* track   = (MediaTrack*) parm1;
+        double value        = *(double*) parm3;
+
+        int packed          = *(int*)parm2;
+        int paramidx        = packed&15;
+        int fxidx           = packed>>16;
+
+        auto track_name     = get_track_name        ( track, true );
+        auto fx_name        = get_fx_name           ( track, fxidx, true );
+        auto param_name     = get_parameter_name    ( track, fxidx, paramidx, true );
+
+        auto track_node     = m_tracks_n->find_child(track_name);
+        auto fxdir_node     = track_node->find_child("fx");
+        auto fx_node        = fxdir_node->find_child(fx_name);
+
+        auto paramdir_node  = fx_node->find_child("parameters");
+        auto param_node     = paramdir_node->find_child(param_name);
+
+        auto domain         = ossia::net::get_domain(*param_node);
+
+        // unnormalize value
+        value *= domain.get_max<float>();
+        value += domain.get_min<float>();
+
+        auto target_p       = param_node->get_parameter();
+        target_p            ->set_value_quiet(value);
+        target_p            ->get_node().get_device().get_protocol().push(*target_p);
+
         break;
     }
     case CSURF_EXT_SETINPUTMONITOR:
