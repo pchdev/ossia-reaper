@@ -94,20 +94,24 @@ extern double (*TimeMap2_timeToBeats)(void *proj, double tpos, int *measures, in
 
 extern void * (*projectconfig_var_addr)(void *proj, int idx);
 
-extern double (*Track_GetPeakInfo)(MediaTrack *tr, int chidx);
-extern bool (*GetTrackUIVolPan)(MediaTrack *tr, double *vol, double *pan);
-extern void (*mkvolpanstr)(char *str, double vol, double pan);
-extern void (*mkvolstr)(char *str, double vol);
-extern void (*mkpanstr)(char *str, double pan);
+extern double (*Track_GetPeakInfo)          ( MediaTrack *tr, int chidx );
+extern bool (*GetTrackUIVolPan)             ( MediaTrack *tr, double *vol, double *pan );
+extern void (*mkvolpanstr)                  ( char *str, double vol, double pan );
+extern void (*mkvolstr)                     ( char *str, double vol );
+extern void (*mkpanstr)                     ( char *str, double pan );
 
-extern int (*TrackFX_GetCount)(MediaTrack *tr);
-extern int (*TrackFX_GetNumParams)(MediaTrack *tr, int fx);
-extern double (*TrackFX_GetParam)(MediaTrack *tr, int fx, int param, double *minval, double *maxval);
-extern bool (*TrackFX_SetParam)(MediaTrack *tr, int fx, int param, double val);
-extern bool (*TrackFX_GetParamName)(MediaTrack *tr, int fx, int param, char *buf, int buflen);
-extern bool (*TrackFX_FormatParamValue)(MediaTrack *tr, int fx, int param, double val, char *buf, int buflen);
-extern bool (*TrackFX_GetFXName)(MediaTrack *tr, int fx, char *buf, int buflen);
-extern GUID *(*GetTrackGUID)(MediaTrack *tr);
+extern bool (*TrackFX_GetEnabled )          ( MediaTrack* track, int fx );
+extern bool (*TrackFX_SetEnabled )          ( MediaTrack* track, int fx, bool enabled );
+
+extern int (*TrackFX_GetCount)              ( MediaTrack *tr );
+extern int (*TrackFX_GetNumParams)          ( MediaTrack *tr, int fx );
+extern double (*TrackFX_GetParam)           ( MediaTrack *tr, int fx, int param, double *minval, double *maxval );
+extern bool (*TrackFX_SetParam)             ( MediaTrack *tr, int fx, int param, double val );
+extern bool (*TrackFX_SetParamNormalized)   ( MediaTrack *tr, int fx, int param, double val ) ;
+extern bool (*TrackFX_GetParamName)         ( MediaTrack *tr, int fx, int param, char *buf, int buflen );
+extern bool (*TrackFX_FormatParamValue)     ( MediaTrack *tr, int fx, int param, double val, char *buf, int buflen );
+extern bool (*TrackFX_GetFXName)            ( MediaTrack *tr, int fx, char *buf, int buflen );
+extern GUID *(*GetTrackGUID)                ( MediaTrack *tr );
 
 extern int *g_config_csurf_rate,*g_config_zoommode;
 

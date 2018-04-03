@@ -99,6 +99,7 @@ public:
     virtual int Extended                ( int call, void *parm1, void *parm2, void *parm3 ) override;
 
     void create_rootnode                ( );
+    void parse_track_fx                 ( MediaTrack* track );
 
     template<typename T>
     void update_track_parameter         ( MediaTrack* track, ossia::string_view name, T const& value );
