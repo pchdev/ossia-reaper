@@ -63,15 +63,78 @@ using namespace ossia::net;
 using namespace ossia::oscquery;
 using namespace std;
 
-class OssiaControlSurface : public IReaperControlSurface
+namespace ossia     {
+namespace reaper    {
+
+class fx_hdl
 {
+    friend class ossia::reaper::track_hdl;
 
-public:
-    OssiaControlSurface(uint32_t osc_port = 1234, uint32_t ws_port = 5678);
-    ~OssiaControlSurface();
+    public:
+    fx_hdl          (const track_hdl& parent, std::string& name, uint16_t index);
+    ~fx_hdl         ( );
 
-    //-------------------------------------------------------------------------------------------------------
+    void update_parameter_value ( std::string& name, float value );
+    bool alive () const;
 
+    protected:
+    uint16_t m_index;
+    std::string get_path() const;
+    std::string m_name;
+    const track_hdl& m_parent;
+};
+
+class track_hdl
+{
+    friend class ossia::reaper::control_surface;
+
+    public: //------------------------------------------------------------------
+
+    track_hdl       ( const control_surface& parent, MediaTrack* track );
+    ~track_hdl      ( );
+
+    template<typename T>
+    void update_common_ossia_parameter  ( std::string name, const T& value );
+
+    void resolve_index          ( );
+    void resolve_fxs            ( );
+    void resolve_added_fxs      ( );
+    void resolve_missing_fxs    ( );
+    fx_hdl& get_fx              ( std::string& name );
+
+    bool alive                      ( ) const;
+    std::string get_path            ( ) const;
+    std::string get_fx_root_path    ( ) const;
+
+    private: //---------------------------------------------------------------
+    MediaTrack*     m_track;
+    std::string     m_name;
+    std::string     m_path;
+    uint8_t         m_index;
+
+    std::vector<fx_hdl*> m_fxs;
+    const control_surface& csurf;
+};
+
+class control_surface : public IReaperControlSurface
+{
+    friend class ossia::reaper::track_hdl;
+
+    public:
+    control_surface   ( uint32_t osc_port = 1234, uint32_t ws_port = 5678 );
+    ~control_surface  ( );
+
+    node_base* get_node                 ( const std::string& path );
+    parameter_base* get_parameter       ( const std::string& path );
+    parameter_base make_parameter       ( std::string name, ossia::val_type ty );
+    std::string get_project_path        ( ) const;
+    std::string get_tracks_root_path    ( ) const;
+
+    static const std::string get_track_name         ( MediaTrack& track );
+    static const std::string get_fx_name            ( MediaTrack& track, int fx );
+    static const std::string get_parameter_name     ( MediaTrack& track, int fx, int parameter );
+
+    //----------------------------------------------------------------------------------------------
     virtual const char* GetTypeString()     { return "Ossia"; }
     virtual const char* GetDescString()     { return "Ossia"; }
     virtual const char* GetConfigString()   { return "??"; }
@@ -79,7 +142,7 @@ public:
     virtual void CloseNoReset() override;
     virtual void Run ( ) override;
 
-    //-------------------------------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------------------
 
     virtual void SetTrackListChange     ( )                                         override;
     virtual void SetSurfaceVolume       ( MediaTrack *trackid, double volume )      override;
@@ -98,20 +161,37 @@ public:
 
     virtual int Extended                ( int call, void *parm1, void *parm2, void *parm3 ) override;
 
-    void create_rootnode                ( );
-    void parse_track_fx                 ( MediaTrack* track );
+    protected: //------------------------------------------------------------------------------------
 
-    template<typename T>
-    void update_track_parameter         ( MediaTrack* track, ossia::string_view name, T const& value );
+    void            expose_project_transport     ( );
 
-    private:
+    uint16_t        get_num_tracks    ( );
+    track_hdl*      get_ossia_track   ( MediaTrack* track );
+    track_hdl*      get_ossia_track   ( std::string& track );
+
+    void                         resolve_track_indexes      ( );
+    std::vector<MediaTrack*>     resolve_added_tracks       ( );
+    std::vector<track_hdl*>      resolve_missing_tracks     ( );
+
+    private: //-------------------------------------------------------------------------------------
+
     unique_ptr<generic_device> m_device;
     HWND* m_dockwindow;
-    node_base* m_project_node;
-    node_base* m_tracks_n;
+    std::string m_project_path;
     midi_Output* m_midi_out;
+    std::vector<track_hdl*> m_tracks;
 
 };
+
+bool operator==(const MediaTrack& lhs, const track_hdl& rhs);
+bool operator==(const track_hdl& lhs, const MediaTrack& rhs);
+
+bool operator!=(const MediaTrack& lhs, const track_hdl& rhs);
+bool operator!=(const track_hdl& lhs, const MediaTrack& rhs);
+
+
+}
+}
 
 
 
