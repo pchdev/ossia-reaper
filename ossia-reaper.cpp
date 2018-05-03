@@ -150,7 +150,9 @@ inline parameter_base& control_surface::make_parameter(std::string name, ossia::
 
 inline parameter_base* control_surface::get_parameter(const std::string& path)
 {
-    return ossia::net::find_node(*m_device.get(), path)->get_parameter();
+    auto node = ossia::net::find_node(*m_device.get(), path);
+    if ( node ) return node->get_parameter();
+    else return 0;
 }
 
 inline node_base* control_surface::get_node(const string &path)
@@ -242,7 +244,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 
 #define SET_COMMON_CALLBACK(p,func)                             \
     p.add_callback([=](const ossia::value& v) {                 \
-        MediaTrack* tr = CSurf_TrackFromID(m_index+1, true);      \
+        MediaTrack* tr = CSurf_TrackFromID(m_index, true);      \
         func                                                    \
     });
 
@@ -253,7 +255,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
     SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<bool>()), NULL);)
 
 #define for_each_reaper_track(var) \
-    for ( int var = 0; var < GetNumTracks(); ++var )
+    for ( int var = 0; var < GetNumTracks()+1; ++var )
 
 //-------------------------------------------------------------------------------------------------
 
@@ -263,6 +265,8 @@ ossia::reaper::track_hdl::track_hdl(control_surface &parent, MediaTrack* tr)
     m_index   = CSurf_TrackToID(tr, false);
     m_path    += "/";
     m_path    += csurf.get_track_name(*tr);
+
+    std::cout << m_path << std::endl;
 
     auto& level    = csurf.make_parameter(m_path + "/common/level", ossia::val_type::FLOAT );
     auto& pan      = csurf.make_parameter(m_path + "/common/pan", ossia::val_type::FLOAT );
@@ -292,6 +296,11 @@ ossia::reaper::track_hdl::~track_hdl()
 template<typename T>
 void ossia::reaper::track_hdl::update_common_ossia_parameter(std::string pname, const T& value)
 {
+    std::cout << get_path() + "/common/" + pname << std::endl;
+
+    if ( ! csurf.get_parameter(get_path()+"/common/"+pname ))
+        std::cout << "could not find parameter\n";
+
     auto& parameter = *csurf.get_parameter(get_path()+"/common/"+pname);
     parameter.set_value_quiet(value);
     parameter.get_node().get_device().get_protocol().push(parameter);
@@ -362,7 +371,7 @@ inline void ossia::reaper::track_hdl::resolve_index()
 
 inline std::string ossia::reaper::track_hdl::get_path() const
 {
-    return csurf.get_tracks_root_path() + "/" + m_name;
+    return m_path;
 }
 
 inline std::string ossia::reaper::track_hdl::get_fx_root_path() const
@@ -392,7 +401,7 @@ void ossia::reaper::control_surface::expose_project_transport()
 
 std::vector<MediaTrack*> ossia::reaper::control_surface::resolve_added_tracks()
 {
-    uint16_t ntracks = GetNumTracks();
+    // GetNumTracks is not including the Master track
     std::vector<MediaTrack*> added_tracks;
 
     for_each_reaper_track( i )
@@ -407,7 +416,6 @@ std::vector<MediaTrack*> ossia::reaper::control_surface::resolve_added_tracks()
 
 std::vector<track_hdl*> ossia::reaper::control_surface::resolve_missing_tracks()
 {
-    uint16_t ntracks = GetNumTracks();
     std::vector<track_hdl*> missing_tracks;
 
     for ( const auto& otrack : m_tracks )
@@ -435,7 +443,7 @@ inline void ossia::reaper::control_surface::resolve_track_indexes()
 void ossia::reaper::control_surface::SetTrackListChange()
 {
     // compare number of tracks on each side
-    uint16_t n_reaper_tracks    = GetNumTracks();
+    uint16_t n_reaper_tracks    = GetNumTracks()+1;
     uint16_t n_ossia_tracks     = get_num_tracks();
 
     if ( n_reaper_tracks > n_ossia_tracks )
