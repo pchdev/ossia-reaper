@@ -243,16 +243,16 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 //-------------------------------------------------------------------------------------------------
 
 #define SET_COMMON_CALLBACK(p,func)                             \
-    p.add_callback([=](const ossia::value& v) {                 \
-        MediaTrack* tr = CSurf_TrackFromID(m_index, true);      \
+    p.add_callback([&](const ossia::value& v) {                 \
+        auto& tr = *m_track;                                    \
         func                                                    \
     });
 
 #define SET_COMMON_FLOAT_CALLBACK(p, setter, update)                                \
-    SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<float>(), false), NULL);)
+    SET_COMMON_CALLBACK(p, setter(&tr, update(&tr, v.get<float>(), false), NULL);)
 
 #define SET_COMMON_BOOL_CALLBACK(p, setter, update)                                 \
-    SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<bool>()), NULL);)
+    SET_COMMON_CALLBACK(p, setter(&tr, update(&tr, v.get<bool>()), NULL);)
 
 #define for_each_reaper_track(var) \
     for ( int var = 0; var < GetNumTracks()+1; ++var )
