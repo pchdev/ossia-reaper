@@ -194,13 +194,16 @@ ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
 
     for ( uint8_t i = 0; i < nparams; ++i )
     {
-        auto pname = control_surface::get_parameter_name(*m_parent.m_track, index, i);
-        parameter_base& parameter = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
         double param_min, param_max;
-        auto param_value = TrackFX_GetParam(m_parent.m_track, m_index, i, &param_min, &param_max);
-        auto domain = ossia::make_domain(param_min, param_max);
+
+        auto pname          = control_surface::get_parameter_name(*m_parent.m_track, index, i);
+        auto& parameter     = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
+
+        auto param_value    = TrackFX_GetParam(m_parent.m_track, m_index, i, &param_min, &param_max);
+        auto domain         = ossia::make_domain(param_min, param_max);
+
         ossia::net::set_domain(parameter.get_node(), domain);
-        parameter.set_value(param_value);
+        parameter.push_value(param_value);
 
         parameter.add_callback([&](const ossia::value& v) {
             auto& tr = *m_parent.m_track;
@@ -380,6 +383,7 @@ void ossia::reaper::track_hdl::update_title(const char* new_title)
     if ( node_base* tnode = csurf.get_node(get_path()) )
         tnode->set_name(new_title);
 
+    m_name = new_title;
     m_path = csurf.get_tracks_root_path()+"/"+new_title;
 }
 
@@ -428,20 +432,19 @@ std::vector<MediaTrack*> ossia::reaper::control_surface::resolve_added_tracks()
     return added_tracks;
 }
 
-std::vector<track_hdl*> ossia::reaper::control_surface::resolve_missing_tracks()
+void ossia::reaper::control_surface::resolve_missing_tracks()
 {
-    std::vector<track_hdl*> missing_tracks;
-
-    for ( const auto& otrack : m_tracks )
+    for ( auto it = m_tracks.begin(); it != m_tracks.end(); )
     {
-        if ( !otrack->alive() )
+        if ( !(*it)->alive() )
         {
-            delete otrack;
-            missing_tracks.push_back(otrack);
+            auto node = get_node(get_tracks_root_path());
+            node->remove_child((*it)->m_name);
+            it = m_tracks.erase(it);
         }
-    }
 
-    return missing_tracks;
+        else ++it;
+    }
 }
 
 inline void ossia::reaper::control_surface::resolve_track_indexes()
@@ -470,13 +473,12 @@ void ossia::reaper::control_surface::SetTrackListChange()
     else if ( n_reaper_tracks < n_ossia_tracks )
     {
         // track or tracks have been removed
-        for ( const auto& missing_track : resolve_missing_tracks() )
-            m_tracks.erase(std::remove(m_tracks.begin(), m_tracks.end(), missing_track), m_tracks.end());
+        resolve_missing_tracks();
     }
     else
     {
-        // track or tracks have been moved
-        resolve_track_indexes();
+        // track or tracks have been moved, useless for now
+        // resolve_track_indexes();
     }
 }
 

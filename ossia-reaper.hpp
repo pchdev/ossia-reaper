@@ -195,8 +195,8 @@ class control_surface : public IReaperControlSurface
     track_hdl*      get_ossia_track   ( std::string& track );
 
     void                         resolve_track_indexes      ( );
+    void                         resolve_missing_tracks     ( );
     std::vector<MediaTrack*>     resolve_added_tracks       ( );
-    std::vector<track_hdl*>      resolve_missing_tracks     ( );
 
     private: //-------------------------------------------------------------------------------------
 
