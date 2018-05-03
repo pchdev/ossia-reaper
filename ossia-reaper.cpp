@@ -195,7 +195,18 @@ ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
     for ( uint8_t i = 0; i < nparams; ++i )
     {
         auto pname = control_surface::get_parameter_name(*m_parent.m_track, index, i);
-        m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
+        parameter_base& parameter = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
+        double param_min, param_max;
+        auto param_value = TrackFX_GetParam(m_parent.m_track, m_index, i, &param_min, &param_max);
+        auto domain = ossia::make_domain(param_min, param_max);
+        ossia::net::set_domain(parameter.get_node(), domain);
+        parameter.set_value(param_value);
+
+        parameter.add_callback([&](const ossia::value& v) {
+            auto& tr = *m_parent.m_track;
+            TrackFX_SetParam(&tr, m_index, i, v.get<float>());
+        });
+
     }
 
 }
