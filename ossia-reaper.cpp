@@ -249,7 +249,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
     });
 
 #define SET_COMMON_FLOAT_CALLBACK(p, setter, update)                                \
-    SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<float>(), true), NULL);)
+    SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<float>(), false), NULL);)
 
 #define SET_COMMON_BOOL_CALLBACK(p, setter, update)                                 \
     SET_COMMON_CALLBACK(p, setter(tr, update(tr, v.get<bool>()), NULL);)
