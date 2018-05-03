@@ -66,12 +66,15 @@ using namespace std;
 namespace ossia     {
 namespace reaper    {
 
+class track_hdl;
+class control_surface;
+
 class fx_hdl
 {
     friend class ossia::reaper::track_hdl;
 
     public:
-    fx_hdl          (const track_hdl& parent, std::string& name, uint16_t index);
+    fx_hdl          ( track_hdl& parent, std::string& name, uint16_t index);
     ~fx_hdl         ( );
 
     void update_parameter_value ( std::string& name, float value );
@@ -81,16 +84,37 @@ class fx_hdl
     uint16_t m_index;
     std::string get_path() const;
     std::string m_name;
-    const track_hdl& m_parent;
+    track_hdl& m_parent;
 };
 
 class track_hdl
 {
     friend class ossia::reaper::control_surface;
+    friend class ossia::reaper::fx_hdl;
+
+    friend bool operator==(const MediaTrack& lhs, const track_hdl& rhs)
+    {
+        return &lhs == rhs.m_track;
+    }
+
+    friend bool operator==(const track_hdl& lhs, const MediaTrack& rhs)
+    {
+        return lhs.m_track == &rhs;
+    }
+
+    friend bool operator!=(const MediaTrack& lhs, const track_hdl& rhs)
+    {
+        return &lhs != rhs.m_track;
+    }
+
+    friend bool operator!=(const track_hdl& lhs, const MediaTrack& rhs)
+    {
+        return lhs.m_track != &rhs;
+    }
 
     public: //------------------------------------------------------------------
 
-    track_hdl       ( const control_surface& parent, MediaTrack* track );
+    track_hdl       ( control_surface& parent, MediaTrack* track );
     ~track_hdl      ( );
 
     template<typename T>
@@ -100,7 +124,7 @@ class track_hdl
     void resolve_fxs            ( );
     void resolve_added_fxs      ( );
     void resolve_missing_fxs    ( );
-    fx_hdl& get_fx              ( std::string& name );
+    fx_hdl* get_fx              ( std::string& name );
 
     bool alive                      ( ) const;
     std::string get_path            ( ) const;
@@ -113,7 +137,7 @@ class track_hdl
     uint8_t         m_index;
 
     std::vector<fx_hdl*> m_fxs;
-    const control_surface& csurf;
+    control_surface& csurf;
 };
 
 class control_surface : public IReaperControlSurface
@@ -126,7 +150,7 @@ class control_surface : public IReaperControlSurface
 
     node_base* get_node                 ( const std::string& path );
     parameter_base* get_parameter       ( const std::string& path );
-    parameter_base make_parameter       ( std::string name, ossia::val_type ty );
+    parameter_base& make_parameter      ( std::string name, ossia::val_type ty );
     std::string get_project_path        ( ) const;
     std::string get_tracks_root_path    ( ) const;
 

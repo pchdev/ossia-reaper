@@ -23,6 +23,7 @@ bool ( *GetTrackName )          ( MediaTrack* track, char* buf, int buf_sz );
 
 bool ( *CSurf_OnMuteChange )    ( MediaTrack *trackid, int mute );
 bool ( *CSurf_OnSoloChange )    ( MediaTrack *trackid, int solo );
+bool ( *CSurf_OnRecArmChange )  ( MediaTrack* trackid, int recarm );
 bool ( *CSurf_OnFXChange )      ( MediaTrack *trackid, int en );
 void ( *CSurf_OnPlay )          ( );
 void ( *CSurf_OnStop )          ( );
@@ -36,6 +37,7 @@ void (*CSurf_SetSurfaceSolo)    ( MediaTrack *trackid, bool solo, IReaperControl
 void (*CSurf_SetSurfaceMute)    ( MediaTrack *trackid, bool mute, IReaperControlSurface *ignoresurf );
 void (*CSurf_SetSurfaceVolume)  ( MediaTrack *trackid, double volume, IReaperControlSurface *ignoresurf );
 void (*CSurf_SetSurfacePan)     ( MediaTrack *trackid, double pan, IReaperControlSurface *ignoresurf );
+void (*CSurf_SetSurfaceRecArm)  ( MediaTrack *trackid, bool recarm, IReaperControlSurface* ignoresurf );
 
 MediaTrack*(*CSurf_TrackFromID) ( int idx, bool mcpView );
 int (*CSurf_TrackToID)          ( MediaTrack *track, bool mcpView );
@@ -68,7 +70,7 @@ inline const std::string control_surface::get_track_name(MediaTrack& track)
 {
     char trackname [ 1024 ];
 
-    GetTrackName        ( track, trackname, 1024 );
+    GetTrackName        ( &track, trackname, 1024 );
     string trackstr     = trackname;
     std::replace        ( trackstr.begin(), trackstr.end(), ' ', '_' );
 
@@ -91,7 +93,7 @@ inline const std::string control_surface::get_parameter_name(
 {
     char param_name [ 1024 ];
 
-    TrackFX_GetParamName    ( track, fx, param, param_name, 1024 );
+    TrackFX_GetParamName    ( &track, fx, param, param_name, 1024 );
     string paramstr         = param_name;
     std::replace            ( paramstr.begin(), paramstr.end(), ' ', '_' );
 
@@ -148,12 +150,12 @@ inline parameter_base& control_surface::make_parameter(std::string name, ossia::
 
 inline parameter_base* control_surface::get_parameter(const std::string& path)
 {
-    return *ossia::net::find_node(*m_device.get(), path)->get_parameter();
+    return ossia::net::find_node(*m_device.get(), path)->get_parameter();
 }
 
 inline node_base* control_surface::get_node(const string &path)
 {
-    return *ossia::net::find_node(*m_device.get(), path);
+    return ossia::net::find_node(*m_device.get(), path);
 }
 
 inline uint16_t control_surface::get_num_tracks()
@@ -164,7 +166,7 @@ inline uint16_t control_surface::get_num_tracks()
 inline ossia::reaper::track_hdl* control_surface::get_ossia_track(MediaTrack* mtrack)
 {
     for ( const auto& track : m_tracks )
-        if ( track == mtrack )
+        if ( *track == *mtrack )
             return track;
 
     return 0;
@@ -182,7 +184,7 @@ inline ossia::reaper::track_hdl* control_surface::get_ossia_track(string& track_
 //-------------------------------------------------------------------------------------------------
 // FX
 //-------------------------------------------------------------------------------------------------
-ossia::reaper::fx_hdl::fx_hdl(const track_hdl &parent, string& name, uint16_t index) :
+ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
     m_name(name), m_parent(parent), m_index(index)
 {
     // expose fxparameters
@@ -190,7 +192,7 @@ ossia::reaper::fx_hdl::fx_hdl(const track_hdl &parent, string& name, uint16_t in
 
     for ( uint8_t i = 0; i < nparams; ++i )
     {
-        auto pname = control_surface::get_parameter_name(m_parent.m_track, index, i);
+        auto pname = control_surface::get_parameter_name(*m_parent.m_track, index, i);
         m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
     }
 
@@ -223,7 +225,7 @@ bool ossia::reaper::fx_hdl::alive() const
 
 void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 {
-    auto& parameter = m_parent.csurf.get_parameter(get_path()+"/"+name);
+    auto& parameter = *m_parent.csurf.get_parameter(get_path()+"/"+name);
     auto domain = parameter.get_domain();
 
     // unnormalize value
@@ -240,7 +242,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 
 #define SET_COMMON_CALLBACK(p,func)                             \
     p.add_callback([=](const ossia::value& v) {                 \
-        MediaTrack* tr = CSurf_TrackFromID(index+1, true);      \
+        MediaTrack* tr = CSurf_TrackFromID(m_index+1, true);      \
         func                                                    \
     });
 
@@ -255,7 +257,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 
 //-------------------------------------------------------------------------------------------------
 
-ossia::reaper::track_hdl::track_hdl(const ossia::reaper::control_surface& parent, MediaTrack* tr)
+ossia::reaper::track_hdl::track_hdl(control_surface &parent, MediaTrack* tr)
     : csurf(parent), m_track(tr), m_path(parent.get_tracks_root_path())
 {
     m_index   = CSurf_TrackToID(tr, false);
@@ -266,20 +268,22 @@ ossia::reaper::track_hdl::track_hdl(const ossia::reaper::control_surface& parent
     auto& pan      = csurf.make_parameter(m_path + "/common/pan", ossia::val_type::FLOAT );
     auto& mute     = csurf.make_parameter(m_path + "/common/mute", ossia::val_type::BOOL );
     auto& solo     = csurf.make_parameter(m_path + "/common/solo", ossia::val_type::BOOL );
+    auto& recarm   = csurf.make_parameter(m_path + "/common/recarm", ossia::val_type::BOOL );
 
     SET_COMMON_FLOAT_CALLBACK   ( level, CSurf_SetSurfaceVolume, CSurf_OnVolumeChange );
     SET_COMMON_FLOAT_CALLBACK   ( pan, CSurf_SetSurfacePan, CSurf_OnPanChange );
     SET_COMMON_BOOL_CALLBACK    ( mute, CSurf_SetSurfaceMute, CSurf_OnMuteChange );
     SET_COMMON_BOOL_CALLBACK    ( solo, CSurf_SetSurfaceSolo, CSurf_OnSoloChange );
+    SET_COMMON_BOOL_CALLBACK    ( recarm, CSurf_SetSurfaceRecArm, CSurf_OnRecArmChange );
 
-    expose_fx_parameters();
+    resolve_fxs();
 }
 
 ossia::reaper::track_hdl::~track_hdl()
 {
     // unexpose track
-    auto& track_node = *ossia::net::find_node(*csurf.m_device.get(), csurf.m_project_name);
-    track_node->remove_child(m_name);
+    auto& track_node = *ossia::net::find_node(*csurf.m_device.get(), csurf.get_tracks_root_path());
+    track_node.remove_child(m_name);
 
     for ( const auto& fx : m_fxs )
         delete fx;
@@ -288,12 +292,12 @@ ossia::reaper::track_hdl::~track_hdl()
 template<typename T>
 void ossia::reaper::track_hdl::update_common_ossia_parameter(std::string pname, const T& value)
 {
-    auto& parameter = csurf.get_parameter(common_path(pname));
+    auto& parameter = *csurf.get_parameter(get_path()+"/common/"+pname);
     parameter.set_value_quiet(value);
     parameter.get_node().get_device().get_protocol().push(parameter);
 }
 
-fx_hdl* ossia::reaper::track_hdl::get_fx(std::string& name)
+fx_hdl *ossia::reaper::track_hdl::get_fx(std::string& name)
 {
     for ( const auto& fx : m_fxs )
     {
@@ -343,7 +347,7 @@ bool ossia::reaper::track_hdl::alive() const
 {
     for_each_reaper_track ( i )
     {
-        auto& mtrack = *CSurf_TrackFromID(i);
+        auto& mtrack = *CSurf_TrackFromID(i,false);
         if ( *this == mtrack )
             return true;
     }
@@ -351,7 +355,7 @@ bool ossia::reaper::track_hdl::alive() const
     return false;
 }
 
-inline void ossia::reaper::track_hdl::refresh_index()
+inline void ossia::reaper::track_hdl::resolve_index()
 {
     m_index = CSurf_TrackToID(m_track, false);
 }
@@ -361,29 +365,9 @@ inline std::string ossia::reaper::track_hdl::get_path() const
     return csurf.get_tracks_root_path() + "/" + m_name;
 }
 
-inline std::string ossia::reaper::track_hdl::get_fx_root_path()
+inline std::string ossia::reaper::track_hdl::get_fx_root_path() const
 {
     return get_path() + "/fx";
-}
-
-bool operator==(const MediaTrack& lhs, const ossia::reaper::track_hdl& rhs)
-{
-    return &lhs == rhs.m_track;
-}
-
-bool operator==(const ossia::reaper::track_hdl& lhs, const MediaTrack& rhs)
-{
-    return lhs.m_track == &rhs;
-}
-
-bool operator!=(const MediaTrack& lhs, const ossia::reaper::track_hdl& rhs)
-{
-    return &lhs != rhs.m_track;
-}
-
-bool operator!=(const ossia::reaper::track_hdl& lhs, const MediaTrack& rhs)
-{
-    return lhs.m_track != &rhs;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -392,8 +376,8 @@ bool operator!=(const ossia::reaper::track_hdl& lhs, const MediaTrack& rhs)
 
 void ossia::reaper::control_surface::expose_project_transport()
 {
-    auto& play = make_parameter(project_path("/transport/play"), ossia::val_type::IMPULSE);
-    auto& stop = make_parameter(project_path("/transport/stop"), ossia::val_type::IMPULSE);
+    auto& play = make_parameter(m_project_path+"/transport/play", ossia::val_type::IMPULSE);
+    auto& stop = make_parameter(m_project_path+"/transport/stop", ossia::val_type::IMPULSE);
 
     play.add_callback([&](const ossia::value& v) { CSurf_OnPlay(); });
     stop.add_callback([&](const ossia::value& v) { CSurf_OnStop(); });
@@ -402,29 +386,18 @@ void ossia::reaper::control_surface::expose_project_transport()
     // TODO: add marker & item navigaton
 }
 
-void ossia::reaper::control_surface::expose_project_tracks()
-{
-    uint16_t ntracks = GetNumTracks();
-
-    for_each_reaper_track ( i )
-    {
-        auto& mtrack = CSurf_TrackFromID(i);
-        m_tracks.push_back(new track_hdl(*this, *mtrack));
-    }
-}
-
 //-----------------------------------------------------------------------------------------------------
 // REAPER_TRACK_UPDATES
 //-----------------------------------------------------------------------------------------------------
 
-std::vector<MediaTrack*> ossia::reaper::control_surface::get_added_tracks()
+std::vector<MediaTrack*> ossia::reaper::control_surface::resolve_added_tracks()
 {
     uint16_t ntracks = GetNumTracks();
     std::vector<MediaTrack*> added_tracks;
 
     for_each_reaper_track( i )
     {
-        auto mtrack = CSurf_TrackFromID(i);
+        auto mtrack = CSurf_TrackFromID(i, false);
         if ( !get_ossia_track(mtrack) )
             added_tracks.push_back(mtrack);
     }
@@ -432,20 +405,24 @@ std::vector<MediaTrack*> ossia::reaper::control_surface::get_added_tracks()
     return added_tracks;
 }
 
-ossia::reaper::track_hdl* ossia::reaper::control_surface::resolve_missing_tracks()
+std::vector<track_hdl*> ossia::reaper::control_surface::resolve_missing_tracks()
 {
     uint16_t ntracks = GetNumTracks();
+    std::vector<track_hdl*> missing_tracks;
+
     for ( const auto& otrack : m_tracks )
     {
         if ( !otrack->alive() )
         {
             delete otrack;
-            return otrack;
+            missing_tracks.push_back(otrack);
         }
     }
+
+    return missing_tracks;
 }
 
-inline ossia::reaper::track_hdl* ossia::reaper::control_surface::resolve_track_indexes()
+inline void ossia::reaper::control_surface::resolve_track_indexes()
 {
     for ( const auto& otrack : m_tracks )
         otrack->resolve_index();
@@ -464,25 +441,20 @@ void ossia::reaper::control_surface::SetTrackListChange()
     if ( n_reaper_tracks > n_ossia_tracks )
     {
         // track or tracks have been added
-        if ( auto added_tracks = get_added_tracks() )
-        {
-            for ( const auto& added_track : added_tracks )
-                m_tracks.push_back ( new ossia::reaper::track_hdl(*this, *added_track) );
-        }
+        for ( const auto& added_track : resolve_added_tracks() )
+            m_tracks.push_back ( new track_hdl(*this, added_track));
     }
+
     else if ( n_reaper_tracks < n_ossia_tracks )
     {
         // track or tracks have been removed
-        if ( auto track = resolve_missing_tracks() )
-        {
-            // remove from vector
-            m_tracks.erase(std::remove(m_tracks.begin(), m_tracks.end(), track), m_tracks.end());
-        }
+        for ( const auto& missing_track : resolve_missing_tracks() )
+            m_tracks.erase(std::remove(m_tracks.begin(), m_tracks.end(), missing_track), m_tracks.end());
     }
     else
     {
         // track or tracks have been moved
-        resolve_track_indexes()
+        resolve_track_indexes();
     }
 }
 
@@ -522,7 +494,8 @@ void ossia::reaper::control_surface::SetSurfaceSelected(MediaTrack *trackid, boo
 
 void ossia::reaper::control_surface::SetSurfaceRecArm(MediaTrack *trackid, bool recarm)
 {
-
+    if ( auto track = get_ossia_track(trackid) )
+        track->update_common_ossia_parameter<bool>("recarm", recarm);
 }
 
 void ossia::reaper::control_surface::SetPlayState(bool play, bool pause, bool rec)
@@ -584,7 +557,7 @@ int ossia::reaper::control_surface::Extended(int call, void *parm1, void *parm2,
     case CSURF_EXT_SETFXCHANGE:
     {
         auto otrack = get_ossia_track((MediaTrack*) parm1);
-        otrack->resolve_fx();
+        otrack->resolve_fxs();
         break;
     }
     case CSURF_EXT_SETFXENABLED:
@@ -603,12 +576,12 @@ int ossia::reaper::control_surface::Extended(int call, void *parm1, void *parm2,
         double value        = *(double*) parm3;
         int packed          = *(int*)parm2;
 
-        auto track_name     = get_track_name        ( track );
-        auto fx_name        = get_fx_name           ( track, packed>>16 );
-        auto param_name     = get_parameter_name    ( track, packed>>16, packed&15 );
+        auto track_name     = get_track_name        ( *track );
+        auto fx_name        = get_fx_name           ( *track, packed>>16 );
+        auto param_name     = get_parameter_name    ( *track, packed>>16, packed&15 );
 
-        auto hdl = get_ossia_track(track);
-        hdl->update_fx_ossia_parameter(fx_name + "/" + param_name, value);
+        auto fx = get_ossia_track(track)->get_fx(fx_name);
+        fx->update_parameter_value(param_name, value);
 
         break;
     }
@@ -715,10 +688,12 @@ REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance,
     REAPER_FUNCPTR_GET ( CSurf_OnPanChange );
     REAPER_FUNCPTR_GET ( CSurf_OnMuteChange );
     REAPER_FUNCPTR_GET ( CSurf_OnSoloChange );
+    REAPER_FUNCPTR_GET ( CSurf_OnRecArmChange );
     REAPER_FUNCPTR_GET ( CSurf_SetSurfaceSolo );
     REAPER_FUNCPTR_GET ( CSurf_SetSurfaceMute );
     REAPER_FUNCPTR_GET ( CSurf_SetSurfacePan );
     REAPER_FUNCPTR_GET ( CSurf_SetSurfaceVolume );
+    REAPER_FUNCPTR_GET ( CSurf_SetSurfaceRecArm );
     REAPER_FUNCPTR_GET ( CSurf_TrackFromID );
     REAPER_FUNCPTR_GET ( CSurf_TrackToID );
     REAPER_FUNCPTR_GET ( CSurf_OnPlay );
