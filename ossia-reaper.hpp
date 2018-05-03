@@ -119,6 +119,7 @@ class track_hdl
 
     template<typename T>
     void update_common_ossia_parameter  ( std::string name, const T& value );
+    void update_title           ( const char *new_title );
 
     void resolve_index          ( );
     void resolve_fxs            ( );

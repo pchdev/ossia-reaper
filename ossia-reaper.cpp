@@ -296,11 +296,6 @@ ossia::reaper::track_hdl::~track_hdl()
 template<typename T>
 void ossia::reaper::track_hdl::update_common_ossia_parameter(std::string pname, const T& value)
 {
-    std::cout << get_path() + "/common/" + pname << std::endl;
-
-    if ( ! csurf.get_parameter(get_path()+"/common/"+pname ))
-        std::cout << "could not find parameter\n";
-
     auto& parameter = *csurf.get_parameter(get_path()+"/common/"+pname);
     parameter.set_value_quiet(value);
     parameter.get_node().get_device().get_protocol().push(parameter);
@@ -367,6 +362,14 @@ bool ossia::reaper::track_hdl::alive() const
 inline void ossia::reaper::track_hdl::resolve_index()
 {
     m_index = CSurf_TrackToID(m_track, false);
+}
+
+void ossia::reaper::track_hdl::update_title(const char* new_title)
+{
+    if ( node_base* tnode = csurf.get_node(get_path()) )
+        tnode->set_name(new_title);
+
+    m_path = csurf.get_tracks_root_path()+"/"+new_title;
 }
 
 inline std::string ossia::reaper::track_hdl::get_path() const
@@ -519,7 +522,7 @@ void ossia::reaper::control_surface::SetRepeatState(bool rep)
 void ossia::reaper::control_surface::SetTrackTitle(MediaTrack *trackid, const char *title)
 {
     auto track = get_ossia_track(trackid);
-    if ( track ) track->m_name = title;
+    if ( track ) track->update_title(title);
 }
 
 bool ossia::reaper::control_surface::GetTouchState(MediaTrack *trackid, int isPan)
