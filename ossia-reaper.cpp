@@ -72,8 +72,7 @@ inline const std::string control_surface::get_track_name(MediaTrack& track)
 
     GetTrackName        ( &track, trackname, 1024 );
     string trackstr     = trackname;
-    std::replace        ( trackstr.begin(), trackstr.end(), ' ', '_' );
-
+    net::sanitize_name  ( trackstr );
     return trackstr;
 }
 
@@ -83,7 +82,7 @@ inline const std::string control_surface::get_fx_name(MediaTrack& track, int fx)
 
     TrackFX_GetFXName   ( &track, fx, fxname, 1024 );
     string fxstr        = fxname;
-    std::replace        ( fxstr.begin(), fxstr.end(), ' ', '_');
+    net::sanitize_name  ( fxstr );
 
     return fxstr;
 }
@@ -95,7 +94,7 @@ inline const std::string control_surface::get_parameter_name(
 
     TrackFX_GetParamName    ( &track, fx, param, param_name, 1024 );
     string paramstr         = param_name;
-    std::replace            ( paramstr.begin(), paramstr.end(), ' ', '_' );
+    net::sanitize_name      ( paramstr );
 
     return paramstr;
 }
