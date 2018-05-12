@@ -146,7 +146,7 @@ class control_surface : public IReaperControlSurface
     friend class ossia::reaper::track_hdl;
 
     public:
-    control_surface   ( uint32_t osc_port = 1234, uint32_t ws_port = 5678 );
+    control_surface   ( uint32_t osc_port = 4321, uint32_t ws_port = 8765 );
     ~control_surface  ( );
 
     node_base* get_node                 ( const std::string& path );

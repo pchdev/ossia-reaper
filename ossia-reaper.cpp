@@ -204,7 +204,7 @@ ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
         ossia::net::set_domain(parameter.get_node(), domain);
         parameter.push_value(param_value);
 
-        parameter.add_callback([&](const ossia::value& v) {
+        parameter.add_callback([this, i](const ossia::value& v) {
             auto& tr = *m_parent.m_track;
             TrackFX_SetParam(&tr, m_index, i, v.get<float>());
         });
