@@ -126,6 +126,7 @@ class track_hdl
     void resolve_added_fxs      ( );
     void resolve_missing_fxs    ( );
     fx_hdl* get_fx              ( std::string& name );
+    void bypass_all_fxs         ( bool bp );
 
     bool alive                      ( ) const;
     std::string get_path            ( ) const;

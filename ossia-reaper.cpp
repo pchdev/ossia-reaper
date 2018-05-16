@@ -284,6 +284,7 @@ ossia::reaper::track_hdl::track_hdl(control_surface &parent, MediaTrack* tr)
     auto& mute     = csurf.make_parameter(m_path + "/common/mute", ossia::val_type::BOOL );
     auto& solo     = csurf.make_parameter(m_path + "/common/solo", ossia::val_type::BOOL );
     auto& recarm   = csurf.make_parameter(m_path + "/common/recarm", ossia::val_type::BOOL );
+    auto& bypfx    = csurf.make_parameter(m_path + "/fx/bypass-all", ossia::val_type::BOOL );
 
     SET_COMMON_FLOAT_CALLBACK   ( level, CSurf_SetSurfaceVolume, CSurf_OnVolumeChange );
     SET_COMMON_FLOAT_CALLBACK   ( pan, CSurf_SetSurfacePan, CSurf_OnPanChange );
@@ -292,6 +293,11 @@ ossia::reaper::track_hdl::track_hdl(control_surface &parent, MediaTrack* tr)
     SET_COMMON_BOOL_CALLBACK    ( recarm, CSurf_SetSurfaceRecArm, CSurf_OnRecArmChange );
 
     resolve_fxs();
+
+    bypfx.add_callback([&](const ossia::value& v)
+    {
+        bypass_all_fxs(v.get<bool>());
+    });
 }
 
 ossia::reaper::track_hdl::~track_hdl()
@@ -322,6 +328,13 @@ fx_hdl *ossia::reaper::track_hdl::get_fx(std::string& name)
     }
 
     return 0;
+}
+
+void ossia::reaper::track_hdl::bypass_all_fxs(bool bp)
+{
+    std::string bpstr = "Bypass";
+    for ( const auto& fx : m_fxs )
+        fx->update_parameter_value(bpstr, bp);
 }
 
 void ossia::reaper::track_hdl::resolve_fxs()
