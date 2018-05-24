@@ -49,7 +49,9 @@ bool ( *TrackFX_GetFXName )     ( MediaTrack* track, int fx, char* buf, int sz )
 // ------------------------------------------------------------------------------- PARAMETERS
 
 int ( *TrackFX_GetNumParams )   ( MediaTrack* track, int fx );
-double ( *TrackFX_GetParam )    ( MediaTrack* track, int fx, int param, double* min_val_out, double* max_val_out ) ;
+
+double ( *TrackFX_GetParamEx )  ( MediaTrack* track, int fx, int param, double* min_val_out, double* max_val_out, double* mid_val_out );
+double ( *TrackFX_GetParam )    ( MediaTrack* track, int fx, int param, double* min_val_out, double* max_val_out );
 bool ( *TrackFX_GetParamName )  ( MediaTrack* track, int fx, int param, char* buf, int sz );
 bool ( *TrackFX_SetParam )      ( MediaTrack* track, int fx, int param, double val);
 
@@ -195,14 +197,15 @@ ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
     {
         double param_min, param_max;
 
-        auto pname          = control_surface::get_parameter_name(*m_parent.m_track, index, i);
-        auto& parameter     = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
+        auto pname = control_surface::get_parameter_name(*m_parent.m_track, index, i);
+        parameter_base& parameter = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
 
-        auto param_value    = TrackFX_GetParam(m_parent.m_track, m_index, i, &param_min, &param_max);
+        auto param_value    = TrackFX_GetParamEx(m_parent.m_track, m_index, i, &param_min, &param_max, nullptr);
         auto domain         = ossia::make_domain(param_min, param_max);
 
         ossia::net::set_domain(parameter.get_node(), domain);
-        parameter.push_value(param_value);
+        parameter.set_value_quiet(param_value);
+        parameter.get_node().get_device().get_protocol().push(parameter);
 
         parameter.add_callback([this, i](const ossia::value& v) {
             auto& tr = *m_parent.m_track;
@@ -244,7 +247,7 @@ void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
     auto domain = parameter.get_domain();
 
     // unnormalize value
-    value *= domain.get_max<float>();
+    value *= (domain.get_max<float>()-domain.get_min<float>());
     value += domain.get_min<float>();
 
     parameter.set_value_quiet(value);
@@ -339,8 +342,8 @@ void ossia::reaper::track_hdl::bypass_all_fxs(bool bp)
 
 void ossia::reaper::track_hdl::resolve_fxs()
 {
-    uint16_t ossia_num_fx = m_fxs.size();
-    uint16_t reaper_num_fx = TrackFX_GetCount(m_track);
+    uint16_t ossia_num_fx   = m_fxs.size();
+    uint16_t reaper_num_fx  = TrackFX_GetCount(m_track);
 
     if ( reaper_num_fx > ossia_num_fx )
         resolve_added_fxs();
@@ -720,6 +723,7 @@ REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance,
     REAPER_FUNCPTR_GET ( TrackFX_SetParamNormalized );
     REAPER_FUNCPTR_GET ( TrackFX_GetEnabled );
     REAPER_FUNCPTR_GET ( TrackFX_SetEnabled );
+    REAPER_FUNCPTR_GET ( TrackFX_GetParamEx);
     REAPER_FUNCPTR_GET ( CSurf_OnVolumeChange );
     REAPER_FUNCPTR_GET ( CSurf_OnPanChange );
     REAPER_FUNCPTR_GET ( CSurf_OnMuteChange );
@@ -744,6 +748,7 @@ REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance,
          !TrackFX_GetFXName ||
          !TrackFX_GetNumParams ||
          !TrackFX_GetParam ||
+         !TrackFX_GetParamEx ||
          !TrackFX_GetParameterStepSizes ||
          !TrackFX_GetParamName ||
          !TrackFX_SetParam ||

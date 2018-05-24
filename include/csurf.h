@@ -105,6 +105,7 @@ extern bool (*TrackFX_SetEnabled )          ( MediaTrack* track, int fx, bool en
 
 extern int (*TrackFX_GetCount)              ( MediaTrack *tr );
 extern int (*TrackFX_GetNumParams)          ( MediaTrack *tr, int fx );
+extern double ( *TrackFX_GetParamEx )       ( MediaTrack* track, int fx, int param, double* min_val_out, double* max_val_out, double* mid_val_out );
 extern double (*TrackFX_GetParam)           ( MediaTrack *tr, int fx, int param, double *minval, double *maxval );
 extern bool (*TrackFX_SetParam)             ( MediaTrack *tr, int fx, int param, double val );
 extern bool (*TrackFX_SetParamNormalized)   ( MediaTrack *tr, int fx, int param, double val ) ;
