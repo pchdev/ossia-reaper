@@ -193,7 +193,7 @@ ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
     // expose fxparameters
     uint16_t nparams = TrackFX_GetNumParams(m_parent.m_track, index);
 
-    for ( uint8_t i = 0; i < nparams; ++i )
+    for ( uint16_t i = 0; i < nparams; ++i )
     {
         double param_min, param_max;
 
@@ -316,7 +316,6 @@ ossia::reaper::track_hdl::~track_hdl()
 template<typename T>
 void ossia::reaper::track_hdl::update_common_ossia_parameter(std::string pname, const T& value)
 {
-    std::cout << get_path()+"/common/"+pname << std::endl;
     auto& parameter = *csurf.get_parameter(get_path()+"/common/"+pname);
     parameter.set_value_quiet(value);
     parameter.get_node().get_device().get_protocol().push(parameter);
@@ -354,7 +353,7 @@ void ossia::reaper::track_hdl::resolve_fxs()
 
 void ossia::reaper::track_hdl::resolve_added_fxs()
 {
-    uint16_t nfx = TrackFX_GetCount(m_track);
+    uint16_t nfx = TrackFX_GetCount(m_track);   
 
     for ( uint16_t i = 0; i < nfx; ++ i )
     {
