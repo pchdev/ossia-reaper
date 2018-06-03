@@ -38,6 +38,11 @@ void (*CSurf_SetSurfaceMute)    ( MediaTrack *trackid, bool mute, IReaperControl
 void (*CSurf_SetSurfaceVolume)  ( MediaTrack *trackid, double volume, IReaperControlSurface *ignoresurf );
 void (*CSurf_SetSurfacePan)     ( MediaTrack *trackid, double pan, IReaperControlSurface *ignoresurf );
 void (*CSurf_SetSurfaceRecArm)  ( MediaTrack *trackid, bool recarm, IReaperControlSurface* ignoresurf );
+int  (*GetTrackNumSends)        ( MediaTrack* tr, int category );
+bool (*GetTrackSendUIVolPan)    ( MediaTrack* tr, int index, double* volume_out, double* pan_out );
+bool (*SetTrackSendUIVol)       ( MediaTrack* track, int send_idx, double vol, int isend );
+bool (*SetTrackSendUIPan)       ( MediaTrack* track, int send_idx, double pan, int isend );
+bool (*GetTrackSendName)        ( MediaTrack* track, int send_index, char* buf, int buf_sz );
 
 MediaTrack*(*CSurf_TrackFromID) ( int idx, bool mcpView );
 int (*CSurf_TrackToID)          ( MediaTrack *track, bool mcpView );
@@ -99,6 +104,17 @@ inline const std::string control_surface::get_parameter_name(
     net::sanitize_name      ( paramstr );
 
     return paramstr;
+}
+
+inline const std::string control_surface::get_send_name(MediaTrack &track, int index)
+{
+    char sname [ 1024 ];
+
+    GetTrackSendName    ( &track, index, sname, 1024 );
+    string sname_str    = sname;
+    net::sanitize_name  ( sname_str );
+
+    return sname_str;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -296,6 +312,7 @@ ossia::reaper::track_hdl::track_hdl(control_surface &parent, MediaTrack* tr)
     SET_COMMON_BOOL_CALLBACK    ( recarm, CSurf_SetSurfaceRecArm, CSurf_OnRecArmChange );
 
     resolve_fxs();
+    resolve_sends();
 
     bypfx.add_callback([&](const ossia::value& v)
     {
@@ -319,6 +336,39 @@ void ossia::reaper::track_hdl::update_common_ossia_parameter(std::string pname, 
     auto& parameter = *csurf.get_parameter(get_path()+"/common/"+pname);
     parameter.set_value_quiet(value);
     parameter.get_node().get_device().get_protocol().push(parameter);
+}
+
+void ossia::reaper::track_hdl::resolve_sends()
+{
+    uint8_t nsends = GetTrackNumSends(m_track, 0);
+
+    for ( uint8_t i = 0; i < nsends; ++i )
+    {
+        double lvl_v, pan_v;
+
+        auto name   = ossia::reaper::control_surface::get_send_name(*m_track, i);
+        parameter_base& level = csurf.make_parameter(m_path + "/sends/" + name + "/level", ossia::val_type::FLOAT);
+        parameter_base& pan   = csurf.make_parameter(m_path + "/sends/" + name + "/pan", ossia::val_type::FLOAT);
+
+        GetTrackSendUIVolPan(m_track, i, &lvl_v, &pan_v);
+
+        level.set_value_quiet(lvl_v);
+        level.get_node().get_device().get_protocol().push(level);
+
+        pan.set_value_quiet(pan_v);
+        pan.get_node().get_device().get_protocol().push(pan);
+
+        level.add_callback([this, i](const ossia::value& v) {
+            auto& tr = *m_track;
+            SetTrackSendUIVol(&tr, i, v.get<float>(), 0);
+        });
+
+        pan.add_callback([this, i](const ossia::value& v) {
+            auto& tr = *m_track;
+            SetTrackSendUIPan(&tr, i, v.get<float>(), 0);
+        });
+
+    }
 }
 
 fx_hdl *ossia::reaper::track_hdl::get_fx(std::string& name)
@@ -665,6 +715,21 @@ int ossia::reaper::control_surface::Extended(int call, void *parm1, void *parm2,
     }
     case CSURF_EXT_SETSENDVOLUME:
     {
+        // parm1=(MediaTrack*)track, parm2=(int*)sendidx, parm3=(double*)volume
+
+        MediaTrack* track   = (MediaTrack*) parm1;
+        int* sendidx        = (int*) parm2;
+        double* volume      = (double*) parm3;
+
+        track_hdl* hdl        = get_ossia_track(track);
+        std::string send_str    = control_surface::get_send_name(*track, *sendidx);
+
+        parameter_base* parameter = get_parameter(hdl->get_path() + "/sends/" + send_str + "/level");
+
+        if ( !parameter ) return 0;
+        parameter->set_value_quiet(*volume);
+        parameter->get_node().get_device().get_protocol().push(*parameter);
+
         break;
     }
     }
@@ -723,6 +788,11 @@ REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance,
     REAPER_FUNCPTR_GET ( TrackFX_GetEnabled );
     REAPER_FUNCPTR_GET ( TrackFX_SetEnabled );
     REAPER_FUNCPTR_GET ( TrackFX_GetParamEx);
+    REAPER_FUNCPTR_GET ( GetTrackSendName );
+    REAPER_FUNCPTR_GET ( GetTrackNumSends );
+    REAPER_FUNCPTR_GET ( GetTrackSendUIVolPan );
+    REAPER_FUNCPTR_GET ( SetTrackSendUIVol );
+    REAPER_FUNCPTR_GET ( SetTrackSendUIPan );
     REAPER_FUNCPTR_GET ( CSurf_OnVolumeChange );
     REAPER_FUNCPTR_GET ( CSurf_OnPanChange );
     REAPER_FUNCPTR_GET ( CSurf_OnMuteChange );
@@ -751,6 +821,11 @@ REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance,
          !TrackFX_GetParameterStepSizes ||
          !TrackFX_GetParamName ||
          !TrackFX_SetParam ||
+         !GetTrackNumSends ||
+         !GetTrackSendName ||
+         !GetTrackSendUIVolPan ||
+         !SetTrackSendUIVol ||
+         !SetTrackSendUIPan ||
          !CSurf_OnVolumeChange ||
          !CSurf_OnPanChange ||
          !CSurf_OnMuteChange ||

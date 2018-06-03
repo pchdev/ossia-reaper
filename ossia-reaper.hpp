@@ -121,6 +121,7 @@ class track_hdl
     void update_common_ossia_parameter  ( std::string name, const T& value );
     void update_title                   ( );
 
+    void resolve_sends          ( );
     void resolve_index          ( );
     void resolve_fxs            ( );
     void resolve_added_fxs      ( );
@@ -159,6 +160,9 @@ class control_surface : public IReaperControlSurface
     static const std::string get_track_name         ( MediaTrack& track );
     static const std::string get_fx_name            ( MediaTrack& track, int fx );
     static const std::string get_parameter_name     ( MediaTrack& track, int fx, int parameter );
+    static const std::string get_send_name          ( MediaTrack& track, int index );
+//    static const std::string get_receive_name       ( MediaTrack& track, int index );
+//    static const std::string get_hw_out_name        ( MediaTrack& track, int index );
 
     //----------------------------------------------------------------------------------------------
     virtual const char* GetTypeString()     { return "Ossia"; }

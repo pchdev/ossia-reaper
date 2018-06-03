@@ -114,6 +114,12 @@ extern bool (*TrackFX_FormatParamValue)     ( MediaTrack *tr, int fx, int param,
 extern bool (*TrackFX_GetFXName)            ( MediaTrack *tr, int fx, char *buf, int buflen );
 extern GUID *(*GetTrackGUID)                ( MediaTrack *tr );
 
+extern int (*GetTrackNumSends)              ( MediaTrack* tr, int category );
+extern bool (*GetTrackSendUIVolPan)         ( MediaTrack* tr, int index, double* volume_out, double* pan_out );
+extern bool (*SetTrackSendUIVol)            ( MediaTrack* track, int send_idx, double vol, int isend );
+extern bool (*SetTrackSendUIPan)            ( MediaTrack* track, int send_idx, double pan, int isend );
+extern bool (*GetTrackSendName)             ( MediaTrack* track, int send_index, char* buf, int buf_sz );
+
 extern int *g_config_csurf_rate,*g_config_zoommode;
 
 extern int __g_projectconfig_timemode2, __g_projectconfig_timemode;
