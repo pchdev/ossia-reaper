@@ -206,30 +206,7 @@ inline ossia::reaper::track_hdl* control_surface::get_ossia_track(string& track_
 ossia::reaper::fx_hdl::fx_hdl(track_hdl &parent, string& name, uint16_t index) :
     m_name(name), m_parent(parent), m_index(index)
 {
-    // expose fxparameters
-    uint16_t nparams = TrackFX_GetNumParams(m_parent.m_track, index);
-
-    for ( uint16_t i = 0; i < nparams; ++i )
-    {
-        double param_min, param_max;
-
-        auto pname = control_surface::get_parameter_name(*m_parent.m_track, index, i);
-        parameter_base& parameter = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
-
-        auto param_value    = TrackFX_GetParamEx(m_parent.m_track, m_index, i, &param_min, &param_max, nullptr);
-        auto domain         = ossia::make_domain(param_min, param_max);
-
-        ossia::net::set_domain(parameter.get_node(), domain);
-        parameter.set_value_quiet(param_value);
-        parameter.get_node().get_device().get_protocol().push(parameter);
-
-        parameter.add_callback([this, i](const ossia::value& v) {
-            auto& tr = *m_parent.m_track;
-            TrackFX_SetParam(&tr, m_index, i, v.get<float>());
-        });
-
-    }
-
+    resolve_parameters();
 }
 
 ossia::reaper::fx_hdl::~fx_hdl()
@@ -257,17 +234,52 @@ bool ossia::reaper::fx_hdl::alive() const
     return false;
 }
 
+void ossia::reaper::fx_hdl::resolve_parameters()
+{
+    uint16_t nparams = TrackFX_GetNumParams(m_parent.m_track, m_index);
+
+    for ( uint16_t i = 0; i < nparams; ++i )
+    {
+        double param_min, param_max;
+
+        auto pname = control_surface::get_parameter_name(*m_parent.m_track, m_index, i);
+        parameter_base& parameter = m_parent.csurf.make_parameter(get_path()+"/"+pname, ossia::val_type::FLOAT);
+
+        auto param_value    = TrackFX_GetParamEx(m_parent.m_track, m_index, i, &param_min, &param_max, nullptr);
+        auto domain         = ossia::make_domain(param_min, param_max);
+
+        ossia::net::set_domain(parameter.get_node(), domain);
+        parameter.set_value_quiet(param_value);
+        parameter.get_node().get_device().get_protocol().push(parameter);
+
+        parameter.add_callback([this, i](const ossia::value& v) {
+            auto& tr = *m_parent.m_track;
+            TrackFX_SetParam(&tr, m_index, i, v.get<float>());
+        });
+    }
+}
+
 void ossia::reaper::fx_hdl::update_parameter_value(string &name, float value)
 {
-    auto& parameter = *m_parent.csurf.get_parameter(get_path()+"/"+name);
-    auto domain = parameter.get_domain();
+    auto parameter = m_parent.csurf.get_parameter(get_path()+"/"+name);
+
+    if ( !parameter )
+    {
+        // if parameters have changed, rescan all.
+        auto root = m_parent.csurf.get_node(get_path());
+        root->clear_children();
+        resolve_parameters();
+        return;
+    }
+
+    auto domain = parameter->get_domain();
 
     // unnormalize value
     value *= (domain.get_max<float>()-domain.get_min<float>());
     value += domain.get_min<float>();
 
-    parameter.set_value_quiet(value);
-    parameter.get_node().get_device().get_protocol().push(parameter);
+    parameter->set_value_quiet(value);
+    parameter->get_node().get_device().get_protocol().push(*parameter);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -399,6 +411,7 @@ void ossia::reaper::track_hdl::resolve_fxs()
 
     else if ( reaper_num_fx < ossia_num_fx )
         resolve_missing_fxs();
+
 }
 
 void ossia::reaper::track_hdl::resolve_added_fxs()

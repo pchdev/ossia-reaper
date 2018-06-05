@@ -77,8 +77,9 @@ class fx_hdl
     fx_hdl          ( track_hdl& parent, std::string& name, uint16_t index);
     ~fx_hdl         ( );
 
+    void resolve_parameters();
     void update_parameter_value ( std::string& name, float value );
-    bool alive () const;
+    bool alive() const;
 
     protected:
     uint16_t m_index;
